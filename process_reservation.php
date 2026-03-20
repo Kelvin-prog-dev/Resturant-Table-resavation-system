@@ -66,7 +66,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         echo "</div>";
     } else {
         // First, insert into customers table
-        $stmt_customer = $conn->prepare("INSERT INTO customers (name, email, phone_number,) VALUES (?, ?, ?, NOW())");
+        $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
 
         if ($stmt_customer === false) {
             die("Prepare failed for customers: " . $conn->error);
@@ -81,7 +81,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $customer_id = $conn->insert_id;
 
             // Now, insert into reservations table
-            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, reservation_date, reservation_time, guests, message, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, reservation_date, reservation_time, guests, special_requests) VALUES (?, ?, ?, ?, ?)");
 
             if ($stmt_reservation === false) {
                 die("Prepare failed for reservations: " . $conn->error);
