@@ -68,7 +68,7 @@
         
         <div class="info-section">
             <h2>Make a Reservation</h2>
-            <p>Ready to dine with us? <a href="C:\xampp\htdocs\Resturant Table resavation system\reservation_form.php">Click here to make a reservation</a></p>
+            <p>Ready to dine with us? <a href="reservation_form.php">Click here to make a reservation</a></p>
         </div>
     </div>
 </body>

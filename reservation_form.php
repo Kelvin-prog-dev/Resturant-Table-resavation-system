@@ -10,7 +10,7 @@
     <div class="container">
         <h1>Table Reservation</h1>
        
-        <form action="process_reservation.php" method="post">
+        <form action="process_reservation.php" method="POST">
             <label for="name">Full Name:</label>
             <input type="text" id="name" name="name" required>
 
@@ -63,7 +63,7 @@
                 <option value="7">7</option>
                 <option value="8">8</option>
                 <option value="9">9</option>
-                <option value="10">10+</option>
+                <option value="10">10</option>
             </select>
 
             <label for="message">Special Requests (optional):</label>
