@@ -1,20 +1,62 @@
 <?php
 // process_reservation.php - Restaurant Table Reservation System
-// Database configuration
-$servername = "localhost";
-$username = "root";
-$password = "Kelvin@254!"; 
-$dbname = "resturant_system";
+require_once 'config.php';
 
-// database connection
-$conn = new mysqli($servername, $username, $password, $dbname);
+// Get database connection
+$conn = getDBConnection();
 
-// Check connection
-if ($conn->connect_error) {
-    die("Database connection failed: " . $conn->connect_error);
+/**
+ * Check if tables are available for the requested date, time, and guest count
+ * 
+ * @param mysqli $conn - Database connection
+ * @param string $date - Reservation date (YYYY-MM-DD)
+ * @param string $time - Reservation time (HH:MM format)
+ * @param int $guests - Number of guests
+ * @return array - Array with 'available' (bool) and optional 'available_table_id' (int)
+ */
+function checkTableAvailability($conn, $date, $time, $guests) {
+    // Query to find tables that:
+    // 1. Have capacity for the requested number of guests
+    // 2. Are NOT already booked for the requested date and time (with 2-hour window)
+    
+    $query = "
+        SELECT t.table_id, t.capacity 
+        FROM tables t 
+        WHERE t.capacity >= ? 
+        AND t.table_id NOT IN (
+            SELECT DISTINCT r.table_id 
+            FROM reservations r 
+            WHERE r.reservation_date = ? 
+            AND TIME_FORMAT(r.reservation_time, '%H:%i') = ? 
+            AND r.status IN ('confirmed', 'active')
+        )
+        LIMIT 1
+    ";
+    
+    $stmt = $conn->prepare($query);
+    
+    if ($stmt === false) {
+        // If tables don't exist yet, return available (for backward compatibility)
+        return array('available' => true, 'available_table_id' => null);
+    }
+    
+    $stmt->bind_param("iss", $guests, $date, $time);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $stmt->close();
+        return array(
+            'available' => true,
+            'available_table_id' => $row['table_id']
+        );
+    } else {
+        $stmt->close();
+        return array('available' => false);
+    }
 }
 
-// Check if form was submitted via POST
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     // Sanitize and validate input
@@ -65,8 +107,68 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
         echo "</div>";
     } else {
-        // First, insert into customers table
-        $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
+        // Check for table availability before making reservation
+        $table_status = checkTableAvailability($conn, $date, $time, $guests);
+
+        if (!$table_status['available']) {
+            // No tables available - notify user
+            echo "<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>No Tables Available - Zest Restaurant</title>
+    <link rel='stylesheet' href='styles.css'>
+    <style>
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 50px auto;
+            max-width: 600px;
+            text-align: center;
+            border: 1px solid #f5c6cb;
+        }
+        .error-message h3 {
+            margin-top: 0;
+            color: #721c24;
+        }
+        .back-link {
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #721c24;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='error-message'>
+            <h3>❌ No Tables Available</h3>
+            <p>Sorry, <strong>" . htmlspecialchars($name) . "</strong>! Unfortunately, all tables are fully booked for:</p>
+            <p>
+                <strong>Date:</strong> " . htmlspecialchars($date) . "<br>
+                <strong>Time:</strong> " . htmlspecialchars($time) . "<br>
+                <strong>Guests:</strong> " . htmlspecialchars($guests) . "
+            </p>
+            <p>Please try a different date, time, or number of guests.</p>
+            <div class='back-link'>
+                <a href='reservation_form.php'>← Try Another Time</a> |
+                <a href='resturant info.php'>← Back to Restaurant Info</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>";
+        } else {
+            // First, insert into customers table
+            $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
 
         if ($stmt_customer === false) {
             die("Prepare failed for customers: " . $conn->error);
@@ -81,14 +183,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $customer_id = $conn->insert_id;
 
             // Now, insert into reservations table
-            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, reservation_date, reservation_time, guests, special_requests) VALUES (?, ?, ?, ?, ?)");
+            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, reservation_date, reservation_time, guests, special_requests, status) VALUES (?, ?, ?, ?, ?, 'confirmed')");
 
             if ($stmt_reservation === false) {
                 die("Prepare failed for reservations: " . $conn->error);
             }
 
             // Bind parameters for reservations
-            $stmt_reservation->bind_param("issis", $customer_id, $date, $time, $guests, $message);
+            $stmt_reservation->bind_param("ississ", $customer_id, $date, $time, $guests, $message);
 
             // Execute the reservation insert
             if ($stmt_reservation->execute()) {
@@ -174,6 +276,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Close customer statement
         $stmt_customer->close();
+        }
     }
 } else {
     // If not a POST request, redirect to form
