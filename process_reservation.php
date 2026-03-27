@@ -180,20 +180,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 exit;
             }
 
-            // First, insert into customers table
-            $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
+            // Check if customer already exists by email
+            $stmt_check_customer = $conn->prepare("SELECT customer_id FROM customers WHERE email = ?");
+            if ($stmt_check_customer === false) {
+                die("Prepare failed for customer check: " . $conn->error);
+            }
+            $stmt_check_customer->bind_param("s", $email);
+            $stmt_check_customer->execute();
+            $result_check = $stmt_check_customer->get_result();
 
-        if ($stmt_customer === false) {
-            die("Prepare failed for customers: " . $conn->error);
-        }
+            if ($result_check->num_rows > 0) {
+                // Customer exists, get their ID
+                $row = $result_check->fetch_assoc();
+                $customer_id = $row['customer_id'];
+                $stmt_check_customer->close();
+            } else {
+                // Customer doesn't exist, insert new one
+                $stmt_check_customer->close();
+                $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
+                if ($stmt_customer === false) {
+                    die("Prepare failed for customers: " . $conn->error);
+                }
+                $stmt_customer->bind_param("sss", $name, $email, $phone);
+                if (!$stmt_customer->execute()) {
+                    die("Execute failed for customers: " . $stmt_customer->error);
+                }
+                $customer_id = $conn->insert_id;
+                $stmt_customer->close();
+            }
 
-        // Bind parameters for customers
-        $stmt_customer->bind_param("sss", $name, $email, $phone);
-
-        // Execute the customer insert
-        if ($stmt_customer->execute()) {
-            // Get the customer_id
-            $customer_id = $conn->insert_id;
 
             // Now, insert into reservations table (including assigned table number)
             $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, table_number, reservation_date, reservation_time, guests, special_requests, status) VALUES (?, ?, ?, ?, ?, ?, 'confirmed')");
@@ -277,18 +292,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             // Close reservation statement
             $stmt_reservation->close();
-        } else {
-            // Error in customer insert
-            echo "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px;'>";
-            echo "<h3>❌ Error Processing Customer Information</h3>";
-            echo "<p>Sorry, there was an error saving your information. Please try again later.</p>";
-            echo "<p>Error details: " . htmlspecialchars($stmt_customer->error) . "</p>";
-            echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
-            echo "</div>";
-        }
-
-        // Close customer statement
-        $stmt_customer->close();
         }
     }
 } else {
