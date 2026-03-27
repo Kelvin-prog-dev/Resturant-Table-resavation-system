@@ -20,11 +20,11 @@ function checkTableAvailability($conn, $date, $time, $guests) {
     // 2. Are NOT already booked for the requested date and time (with 2-hour window)
     
     $query = "
-        SELECT t.table_id, t.capacity 
+        SELECT t.table_number, t.capacity 
         FROM tables t 
         WHERE t.capacity >= ? 
-        AND t.table_id NOT IN (
-            SELECT DISTINCT r.table_id 
+        AND t.table_number NOT IN (
+            SELECT DISTINCT r.table_number
             FROM reservations r 
             WHERE r.reservation_date = ? 
             AND TIME_FORMAT(r.reservation_time, '%H:%i') = ? 
@@ -37,7 +37,7 @@ function checkTableAvailability($conn, $date, $time, $guests) {
     
     if ($stmt === false) {
         // If tables don't exist yet, return available (for backward compatibility)
-        return array('available' => true, 'available_table_id' => null);
+        return array('available' => true, 'available_table_number' => null);
     }
     
     $stmt->bind_param("iss", $guests, $date, $time);
@@ -49,7 +49,7 @@ function checkTableAvailability($conn, $date, $time, $guests) {
         $stmt->close();
         return array(
             'available' => true,
-            'available_table_id' => $row['table_id']
+            'available_table_number' => $row['table_number']
         );
     } else {
         $stmt->close();
@@ -190,7 +190,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
 
             // Bind parameters for reservations
-            $stmt_reservation->bind_param("ississ", $customer_id, $date, $time, $guests, $message);
+            $stmt_reservation->bind_param("issis", $customer_id, $date, $time, $guests, $message);
 
             // Execute the reservation insert
             if ($stmt_reservation->execute()) {

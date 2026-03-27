@@ -50,6 +50,17 @@
         .cancel-btn:hover {
             background-color: #c82333;
         }
+        .delete-btn {
+            background-color: #8b0000;
+            color: white;
+            padding: 6px 12px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .delete-btn:hover {
+            background-color: #a00000;
+        }
         .status-confirmed {
             color: #28a745;
             font-weight: bold;
@@ -90,6 +101,19 @@
             $stmt->close();
 
             echo '<div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px;">Reservation cancelled successfully!</div>';
+        }
+
+        // Handle deletion
+        if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+            $reservation_id = (int)$_GET['delete'];
+
+            // Delete the reservation
+            $stmt = $conn->prepare("DELETE FROM reservations WHERE reservation_id = ?");
+            $stmt->bind_param("i", $reservation_id);
+            $stmt->execute();
+            $stmt->close();
+
+            echo '<div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px;">Reservation deleted successfully!</div>';
         }
 
         // Fetch all reservations with customer info
@@ -149,7 +173,8 @@
                                     <a href="?cancel=<?php echo $row['reservation_id']; ?>" class="cancel-btn"
                                        onclick="return confirm('Are you sure you want to cancel this reservation?')">Cancel</a>
                                 <?php else: ?>
-                                    <span style="color: #666;">Cancelled</span>
+                                    <a href="?delete=<?php echo $row['reservation_id']; ?>" class="delete-btn"
+                                       onclick="return confirm('Are you sure you want to delete this cancelled reservation?')">Delete</a>
                                 <?php endif; ?>
                             </td>
                         </tr>
