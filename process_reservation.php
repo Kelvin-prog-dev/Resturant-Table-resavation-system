@@ -29,6 +29,7 @@ function checkTableAvailability($conn, $date, $time, $guests) {
             WHERE r.reservation_date = ? 
             AND TIME_FORMAT(r.reservation_time, '%H:%i') = ? 
             AND r.status IN ('confirmed', 'active')
+            AND r.table_number IS NOT NULL
         )
         LIMIT 1
     ";
@@ -167,6 +168,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </body>
 </html>";
         } else {
+            // Ensure we have an actual table number from availability check
+            $assigned_table_number = $table_status['available_table_number'] ?? null;
+
+            if (empty($assigned_table_number)) {
+                echo "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px;'>";
+                echo "<h3>❌ No Table Assigned</h3>";
+                echo "<p>Sorry, we could not find an available table at this time. Please try another slot.</p>";
+                echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
+                echo "</div>";
+                exit;
+            }
+
             // First, insert into customers table
             $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
 
@@ -182,15 +195,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Get the customer_id
             $customer_id = $conn->insert_id;
 
-            // Now, insert into reservations table
-            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, reservation_date, reservation_time, guests, special_requests, status) VALUES (?, ?, ?, ?, ?, 'confirmed')");
+            // Now, insert into reservations table (including assigned table number)
+            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, table_number, reservation_date, reservation_time, guests, special_requests, status) VALUES (?, ?, ?, ?, ?, ?, 'confirmed')");
 
             if ($stmt_reservation === false) {
                 die("Prepare failed for reservations: " . $conn->error);
             }
 
             // Bind parameters for reservations
-            $stmt_reservation->bind_param("issis", $customer_id, $date, $time, $guests, $message);
+            $stmt_reservation->bind_param("iissis", $customer_id, $assigned_table_number, $date, $time, $guests, $message);
 
             // Execute the reservation insert
             if ($stmt_reservation->execute()) {
