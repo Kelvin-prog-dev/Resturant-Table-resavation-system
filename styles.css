@@ -1,55 +1,499 @@
+/* =============================================
+   Zest Restaurant — Shared Stylesheet
+   ============================================= */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-top: 10px;
-            font-weight: bold;
-        }
-        input, select, textarea {
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .back-link {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .back-link a {
-            color: #333;
-            text-decoration: none;
-        }
-        .back-link a:hover {
-            text-decoration: underline;
-        }
- 
+    font-family: 'DM Sans', sans-serif;
+    background-image: ("C:\xampp\htdocs\Resturant Table Resavation System\images\zest.jpg");
+    color: #1a1208;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+/* ── Wrappers ── */
+.zest-wrap,
+.res-wrap {
+    max-width: 820px;
+    margin: 0 auto;
+}
+
+/* ── Hero (info page) ── */
+.zest-hero {
+    position: relative;
+    background: #1a1208;
+    border-radius: 16px;
+    padding: 3rem 2.5rem 2.5rem;
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+}
+
+.zest-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 80% 20%, #c8860a22 0%, transparent 60%),
+        radial-gradient(ellipse at 10% 80%, #8b4a0a18 0%, transparent 50%);
+    pointer-events: none;
+}
+
+.zest-tagline {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #c8860a;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zest-hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 48px;
+    font-weight: 700;
+    color: #f5e6c8;
+    margin-bottom: 1rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+}
+
+.zest-hero h1 span {
+    color: #c8860a;
+}
+
+.zest-hero p {
+    font-size: 15px;
+    color: #a89880;
+    max-width: 480px;
+    line-height: 1.7;
+    margin-bottom: 2rem;
+    font-weight: 300;
+}
+
+.zest-reserve-btn {
+    display: inline-block;
+    background: #c8860a;
+    color: #1a1208;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 12px 28px;
+    border-radius: 2px;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.zest-reserve-btn:hover {
+    background: #dfa020;
+}
+
+/* ── Info page grid ── */
+.zest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ── Cards ── */
+.zest-card,
+.zest-full-card,
+.res-card {
+    background: #ffffff;
+    border: 0.5px solid rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+.zest-full-card {
+    margin-bottom: 1rem;
+}
+
+.res-card {
+    padding: 2rem;
+}
+
+.zest-card-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #c8860a;
+    font-weight: 500;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Hours ── */
+.hours-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+    font-size: 13px;
+}
+
+.hours-row:last-of-type {
+    border-bottom: none;
+}
+
+.hours-day {
+    color: #888;
+    font-weight: 400;
+}
+
+.hours-time {
+    font-weight: 500;
+    color: #1a1208;
+}
+
+.hours-badge {
+    display: inline-block;
+    background: #c8860a18;
+    color: #c8860a;
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    margin-top: 12px;
+}
+
+/* ── Contact ── */
+.contact-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.contact-row:last-child {
+    border-bottom: none;
+}
+
+.contact-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #f5f0e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.contact-icon i {
+    font-size: 15px;
+    color: #c8860a;
+}
+
+.contact-label {
+    font-size: 11px;
+    color: #aaa;
+    margin-bottom: 2px;
+}
+
+.contact-value {
+    color: #1a1208;
+    font-weight: 500;
+}
+
+/* ── Features ── */
+.features-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.features-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #555;
+}
+
+.feat-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #c8860a;
+    flex-shrink: 0;
+}
+
+/* ── Footer ── */
+.zest-footer {
+    text-align: center;
+    padding: 0.5rem 0 0.25rem;
+}
+
+.zest-footer a {
+    color: #bbb;
+    text-decoration: none;
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+.zest-footer a:hover {
+    opacity: 1;
+}
+
+/* ── Reservation hero ── */
+.res-hero {
+    background: #1a1208;
+    border-radius: 16px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.res-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 80% 50%, #c8860a1a 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.res-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #a89880;
+    text-decoration: none;
+    margin-bottom: 1rem;
+    transition: color 0.2s;
+}
+
+.res-back:hover {
+    color: #c8860a;
+}
+
+.res-tagline {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #c8860a;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.res-hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 38px;
+    font-weight: 700;
+    color: #f5e6c8;
+    line-height: 1.15;
+}
+
+.res-hero h1 span {
+    color: #c8860a;
+}
+
+.res-hero p {
+    font-size: 13px;
+    color: #a89880;
+    margin-top: 0.5rem;
+    font-weight: 300;
+}
+
+/* ── Form ── */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group.full {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #c8860a;
+    font-weight: 500;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: #1a1208;
+    background: #f5f0e8;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: #c8860a;
+    box-shadow: 0 0 0 3px #c8860a18;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 90px;
+}
+
+.form-divider {
+    height: 0.5px;
+    background: rgba(0, 0, 0, 0.08);
+    grid-column: 1 / -1;
+    margin: 0.5rem 0;
+}
+
+.section-title {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #aaa;
+    font-weight: 500;
+    grid-column: 1 / -1;
+    margin-bottom: -0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* ── Guest pills ── */
+.guest-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    grid-column: 1 / -1;
+}
+
+.guest-pill {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+    background: #f5f0e8;
+    font-size: 13px;
+    font-weight: 500;
+    color: #888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+    user-select: none;
+}
+
+.guest-pill:hover {
+    border-color: #c8860a;
+    color: #c8860a;
+}
+
+.guest-pill.active {
+    background: #c8860a;
+    border-color: #c8860a;
+    color: #1a1208;
+}
+
+/* ── Submit button ── */
+.res-submit {
+    display: block;
+    width: 100%;
+    background: #1a1208;
+    color: #f5e6c8;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 1.5rem;
+    transition: background 0.2s, color 0.2s;
+}
+
+.res-submit:hover {
+    background: #c8860a;
+    color: #1a1208;
+}
+
+.optional-note {
+    font-size: 10px;
+    color: #aaa;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .zest-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .zest-hero h1 {
+        font-size: 36px;
+    }
+
+    .zest-hero {
+        padding: 2rem 1.5rem;
+    }
+
+    .features-list {
+        grid-template-columns: 1fr;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .res-hero {
+        padding: 1.75rem 1.5rem;
+    }
+
+    .res-hero h1 {
+        font-size: 30px;
+    }
+
+    .res-card {
+        padding: 1.5rem;
+    }
+}
