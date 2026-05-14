@@ -14,7 +14,7 @@ define('ADMIN_PASSWORD', 'admin123'); // Change this to a secure password
 
 // Application settings
 define('APP_NAME', 'Zest Restaurant Reservation System');
-define('TIMEZONE', 'UTC');
+define('TIMEZONE', 'EST Africa Time'); // Set to your local timezone
 
 // Database connection function
 function getDBConnection() {
