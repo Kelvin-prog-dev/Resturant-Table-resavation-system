@@ -1,305 +1,243 @@
 <?php
 // process_reservation.php - Restaurant Table Reservation System
+session_start();
 require_once 'config.php';
 
-// Get database connection
 $conn = getDBConnection();
 
 /**
- * Check if tables are available for the requested date, time, and guest count
- * 
- * @param mysqli $conn - Database connection
- * @param string $date - Reservation date (YYYY-MM-DD)
- * @param string $time - Reservation time (HH:MM format)
- * @param int $guests - Number of guests
- * @return array - Array with 'available' (bool) and optional 'available_table_id' (int)
+ * Check table availability for a given date, time, and guest count.
+ * Fetches table sizes from the DB and excludes tables already booked
+ * within a 2-hour window of the requested time.
+ *
+ * @param mysqli $conn
+ * @param string $date   YYYY-MM-DD
+ * @param string $time   HH:MM  (24-hour)
+ * @param int    $guests
+ * @return array { available: bool, available_table_number: int|null }
  */
 function checkTableAvailability($conn, $date, $time, $guests) {
-    // Query to find tables that:
-    // 1. Have capacity for the requested number of guests
-    // 2. Are NOT already booked for the requested date and time (with 2-hour window)
-    
+    /*
+     * Excludes any table that has a confirmed/active/pending booking
+     * within 120 minutes either side of the requested time.
+     * TIMESTAMPDIFF(MINUTE, time_a, time_b) is negative if time_a > time_b,
+     * so we wrap in ABS() to catch both directions.
+     */
     $query = "
-        SELECT t.table_number, t.capacity 
-        FROM tables t 
-        WHERE t.capacity >= ? 
-        AND t.table_number NOT IN (
-            SELECT DISTINCT r.table_number
-            FROM reservations r 
-            WHERE r.reservation_date = ? 
-            AND TIME_FORMAT(r.reservation_time, '%H:%i') = ? 
-            AND r.status IN ('confirmed', 'active')
-            AND r.table_number IS NOT NULL
-        )
+        SELECT t.table_number, t.capacity
+        FROM tables t
+        WHERE t.capacity >= ?
+          AND t.table_number NOT IN (
+              SELECT DISTINCT r.table_number
+              FROM reservations r
+              WHERE r.reservation_date = ?
+                AND r.status IN ('confirmed', 'active', 'pending')
+                AND r.table_number IS NOT NULL
+                AND ABS(TIMESTAMPDIFF(MINUTE, r.reservation_time, ?)) < 120
+          )
+        ORDER BY t.capacity ASC
         LIMIT 1
     ";
-    
+
     $stmt = $conn->prepare($query);
-    
+
     if ($stmt === false) {
-        // If tables don't exist yet, return available (for backward compatibility)
-        return array('available' => true, 'available_table_number' => null);
+        error_log("checkTableAvailability prepare failed: " . $conn->error);
+        return ['available' => true, 'available_table_number' => null];
     }
-    
+
     $stmt->bind_param("iss", $guests, $date, $time);
     $stmt->execute();
     $result = $stmt->get_result();
-    
+
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
         $stmt->close();
-        return array(
-            'available' => true,
-            'available_table_number' => $row['table_number']
-        );
-    } else {
-        $stmt->close();
-        return array('available' => false);
+        return [
+            'available'              => true,
+            'available_table_number' => (int) $row['table_number'],
+        ];
     }
+
+    $stmt->close();
+    return ['available' => false];
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-    // Sanitize and validate input
-    $name = trim(htmlspecialchars($_POST['name'] ?? ''));
-    $email = trim(htmlspecialchars($_POST['email'] ?? ''));
-    $phone = trim(htmlspecialchars($_POST['phone'] ?? ''));
-    $date = trim(htmlspecialchars($_POST['date'] ?? ''));
-    $time = trim(htmlspecialchars($_POST['time'] ?? ''));
-    $guests = trim(htmlspecialchars($_POST['guests'] ?? ''));
-    $message = trim(htmlspecialchars($_POST['message'] ?? ''));
-
-    // Basic validation
-    $errors = [];
-
-    if (empty($name)) {
-        $errors[] = "Name is required";
-    }
-
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Valid email is required";
-    }
-
-    if (empty($phone)) {
-        $errors[] = "Phone number is required";
-    }
-
-    if (empty($date)) {
-        $errors[] = "Reservation date is required";
-    }
-
-    if (empty($time)) {
-        $errors[] = "Reservation time is required";
-    }
-
-    if (empty($guests) || !is_numeric($guests) || $guests < 1) {
-        $errors[] = "Valid number of guests is required";
-    }
-
-    // If validation fails, display errors
-    if (!empty($errors)) {
-        echo "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px;'>";
-        echo "<h3>Validation Errors:</h3>";
-        echo "<ul>";
-        foreach ($errors as $error) {
-            echo "<li>" . htmlspecialchars($error) . "</li>";
-        }
-        echo "</ul>";
-        echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
-        echo "</div>";
-    } else {
-        // Check for table availability before making reservation
-        $table_status = checkTableAvailability($conn, $date, $time, $guests);
-
-        if (!$table_status['available']) {
-            // No tables available - notify user
-            echo "<!DOCTYPE html>
-<html lang='en'>
+/* ── Helper: render a full Zest-styled status page ── */
+function renderStatusPage(string $title, string $heroTitle, string $heroSub, string $bodyHtml): void {
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>No Tables Available - Zest Restaurant</title>
-    <link rel='stylesheet' href='styles.css'>
-    <style>
-        .error-message {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 5px;
-            margin: 50px auto;
-            max-width: 600px;
-            text-align: center;
-            border: 1px solid #f5c6cb;
-        }
-        .error-message h3 {
-            margin-top: 0;
-            color: #721c24;
-        }
-        .back-link {
-            margin-top: 20px;
-        }
-        .back-link a {
-            color: #721c24;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .back-link a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{$title} — Zest Restaurant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class='container'>
-        <div class='error-message'>
-            <h3>❌ No Tables Available</h3>
-            <p>Sorry, <strong>" . htmlspecialchars($name) . "</strong>! Unfortunately, all tables are fully booked for:</p>
-            <p>
-                <strong>Date:</strong> " . htmlspecialchars($date) . "<br>
-                <strong>Time:</strong> " . htmlspecialchars($time) . "<br>
-                <strong>Guests:</strong> " . htmlspecialchars($guests) . "
-            </p>
-            <p>Please try a different date, time, or number of guests.</p>
-            <div class='back-link'>
-                <a href='reservation_form.php'>← Try Another Time</a> |
-                <a href='resturant info.php'>← Back to Restaurant Info</a>
-            </div>
-        </div>
+<div class="status-wrap">
+    <div class="status-hero">
+        <h1>{$heroTitle}</h1>
+        <p>{$heroSub}</p>
     </div>
-</body>
-</html>";
-        } else {
-            // Ensure we have an actual table number from availability check
-            $assigned_table_number = $table_status['available_table_number'] ?? null;
-
-            if (empty($assigned_table_number)) {
-                echo "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px;'>";
-                echo "<h3>❌ No Table Assigned</h3>";
-                echo "<p>Sorry, we could not find an available table at this time. Please try another slot.</p>";
-                echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
-                echo "</div>";
-                exit;
-            }
-
-            // Check if customer already exists by email
-            $stmt_check_customer = $conn->prepare("SELECT customer_id FROM customers WHERE email = ?");
-            if ($stmt_check_customer === false) {
-                die("Prepare failed for customer check: " . $conn->error);
-            }
-            $stmt_check_customer->bind_param("s", $email);
-            $stmt_check_customer->execute();
-            $result_check = $stmt_check_customer->get_result();
-
-            if ($result_check->num_rows > 0) {
-                // Customer exists, get their ID
-                $row = $result_check->fetch_assoc();
-                $customer_id = $row['customer_id'];
-                $stmt_check_customer->close();
-            } else {
-                // Customer doesn't exist, insert new one
-                $stmt_check_customer->close();
-                $stmt_customer = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
-                if ($stmt_customer === false) {
-                    die("Prepare failed for customers: " . $conn->error);
-                }
-                $stmt_customer->bind_param("sss", $name, $email, $phone);
-                if (!$stmt_customer->execute()) {
-                    die("Execute failed for customers: " . $stmt_customer->error);
-                }
-                $customer_id = $conn->insert_id;
-                $stmt_customer->close();
-            }
-
-
-            // Now, insert into reservations table (including assigned table number)
-            $stmt_reservation = $conn->prepare("INSERT INTO reservations (customer_id, table_number, reservation_date, reservation_time, guests, special_requests, status) VALUES (?, ?, ?, ?, ?, ?, 'confirmed')");
-
-            if ($stmt_reservation === false) {
-                die("Prepare failed for reservations: " . $conn->error);
-            }
-
-            // Bind parameters for reservations
-            $stmt_reservation->bind_param("iissis", $customer_id, $assigned_table_number, $date, $time, $guests, $message);
-
-            // Execute the reservation insert
-            if ($stmt_reservation->execute()) {
-                // Success message
-                echo "<!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Reservation Submitted - Zest Restaurant</title>
-    <link rel='stylesheet' href='styles.css'>
-    <style>
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 20px;
-            border-radius: 5px;
-            margin: 50px auto;
-            max-width: 600px;
-            text-align: center;
-            border: 1px solid #c3e6cb;
-        }
-        .success-message h3 {
-            margin-top: 0;
-            color: #155724;
-        }
-        .back-link {
-            margin-top: 20px;
-        }
-        .back-link a {
-            color: #155724;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .back-link a:hover {
-            text-decoration: underline;
-        }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='success-message'>
-            <h3>✓ Reservation Request Submitted Successfully!</h3>
-            <p>Thank you, <strong>" . htmlspecialchars($name) . "</strong>. We have received your reservation request.</p>
-            <p><strong>Details:</strong></p>
-            <ul style='text-align: left; display: inline-block;'>
-                <li>Date: " . htmlspecialchars($date) . "</li>
-                <li>Time: " . htmlspecialchars($time) . "</li>
-                <li>Guests: " . htmlspecialchars($guests) . "</li>
-                <li>Phone: " . htmlspecialchars($phone) . "</li>
-                <li>Email: " . htmlspecialchars($email) . "</li>
-            </ul>
-            <p>We will contact you at <strong>" . htmlspecialchars($phone) . "</strong> or <strong>" . htmlspecialchars($email) . "</strong> to confirm your reservation within 24 hours.</p>
-            <div class='back-link'>
-                <a href='reservation_form.php'>← Make Another Reservation</a> |
-                <a href='resturant info.php'>← Back to Restaurant Info</a>
-            </div>
-        </div>
+    <div class="status-card">
+        {$bodyHtml}
     </div>
+</div>
 </body>
-</html>";
-            } else {
-                // Error in reservation insert
-                echo "<div style='background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px;'>";
-                echo "<h3>❌ Error Processing Reservation</h3>";
-                echo "<p>Sorry, there was an error processing your reservation request. Please try again later.</p>";
-                echo "<p>Error details: " . htmlspecialchars($stmt_reservation->error) . "</p>";
-                echo "<p><a href='reservation_form.php'>← Back to Reservation Form</a></p>";
-                echo "</div>";
-            }
+</html>
+HTML;
+}
 
-            // Close reservation statement
-            $stmt_reservation->close();
-        }
-    }
-} else {
-    // If not a POST request, redirect to form
+/* ════════════════════════════════════════════
+   Main request handler
+   ════════════════════════════════════════════ */
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     header("Location: reservation_form.php");
     exit();
 }
 
-// Close database connection
+// ── 1. Sanitise inputs ──────────────────────────────────────────
+$name    = trim(htmlspecialchars($_POST['name']    ?? ''));
+$email   = trim(htmlspecialchars($_POST['email']   ?? ''));
+$phone   = trim(htmlspecialchars($_POST['phone']   ?? ''));
+$date    = trim(htmlspecialchars($_POST['date']    ?? ''));
+$time    = trim(htmlspecialchars($_POST['time']    ?? ''));
+$guests  = trim(htmlspecialchars($_POST['guests']  ?? ''));
+$message = trim(htmlspecialchars($_POST['message'] ?? ''));
+
+// ── 2. Validate ─────────────────────────────────────────────────
+$errors = [];
+
+if (empty($name))
+    $errors[] = "Full name is required.";
+if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL))
+    $errors[] = "A valid email address is required.";
+if (empty($phone))
+    $errors[] = "Phone number is required.";
+if (empty($date))
+    $errors[] = "Reservation date is required.";
+elseif (strtotime($date) < strtotime('today'))
+    $errors[] = "Reservation date cannot be in the past.";
+if (empty($time))
+    $errors[] = "Reservation time is required.";
+if (empty($guests) || !is_numeric($guests) || (int)$guests < 1)
+    $errors[] = "Please select a valid number of guests.";
+
+if (!empty($errors)) {
+    $errorList = '<ul style="margin:0 0 1.25rem 1rem;">';
+    foreach ($errors as $e)
+        $errorList .= '<li style="margin-bottom:6px;font-size:14px;color:#555;">' . $e . '</li>';
+    $errorList .= '</ul>';
+
+    $body = $errorList . '
+        <div class="status-actions">
+            <a href="reservation_form.php" class="btn-primary">← Fix my details</a>
+            <a href="index.php" class="btn-secondary">Home</a>
+        </div>';
+    renderStatusPage('Validation Error', 'Something\'s <span>missing</span>', 'Please fix the issues below and try again.', $body);
+    $conn->close();
+    exit();
+}
+
+$guests = (int) $guests;
+
+// ── 3. Check table availability ─────────────────────────────────
+$table_status = checkTableAvailability($conn, $date, $time, $guests);
+
+if (!$table_status['available']) {
+    $formattedDate = date('D, d M Y', strtotime($date));
+    $body = "
+        <div class='detail-row'><span class='detail-label'>Name</span><span class='detail-value'>" . htmlspecialchars($name) . "</span></div>
+        <div class='detail-row'><span class='detail-label'>Date</span><span class='detail-value'>{$formattedDate}</span></div>
+        <div class='detail-row'><span class='detail-label'>Time</span><span class='detail-value'>" . htmlspecialchars($time) . "</span></div>
+        <div class='detail-row' style='margin-bottom:1.25rem'><span class='detail-label'>Guests</span><span class='detail-value'>{$guests}</span></div>
+        <p style='font-size:13px;color:#888;margin-bottom:1.25rem;line-height:1.6;'>
+            All tables with capacity for <strong>{$guests}</strong> guest(s) are fully booked during that time slot.
+            Please try a different date or time.
+        </p>
+        <div class='status-actions'>
+            <a href='reservation_form.php' class='btn-primary'>Try another slot</a>
+            <a href='index.php' class='btn-secondary'>Home</a>
+        </div>";
+    renderStatusPage('No Tables Available', 'No tables <span>available</span>', 'All tables are fully booked for your selected slot.', $body);
+    $conn->close();
+    exit();
+}
+
+$assigned_table_number = $table_status['available_table_number'];
+
+// ── 4. Upsert customer ──────────────────────────────────────────
+$stmt_check = $conn->prepare("SELECT customer_id FROM customers WHERE email = ?");
+if ($stmt_check === false) die("DB error: " . $conn->error);
+$stmt_check->bind_param("s", $email);
+$stmt_check->execute();
+$result_check = $stmt_check->get_result();
+
+if ($result_check->num_rows > 0) {
+    $customer_id = $result_check->fetch_assoc()['customer_id'];
+    $stmt_check->close();
+} else {
+    $stmt_check->close();
+    $stmt_cust = $conn->prepare("INSERT INTO customers (customer_name, email, phone_number) VALUES (?, ?, ?)");
+    if ($stmt_cust === false) die("DB error: " . $conn->error);
+    $stmt_cust->bind_param("sss", $name, $email, $phone);
+    if (!$stmt_cust->execute()) die("DB error: " . $stmt_cust->error);
+    $customer_id = $conn->insert_id;
+    $stmt_cust->close();
+}
+
+// ── 5. Insert reservation with status = 'pending' ───────────────
+//      Status is updated to 'confirmed' once payment succeeds.
+$stmt_res = $conn->prepare(
+    "INSERT INTO reservations
+        (customer_id, table_number, reservation_date, reservation_time, guests, special_requests, status)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending')"
+);
+if ($stmt_res === false) die("DB error: " . $conn->error);
+$stmt_res->bind_param("iissis", $customer_id, $assigned_table_number, $date, $time, $guests, $message);
+
+if (!$stmt_res->execute()) {
+    $errMsg = htmlspecialchars($stmt_res->error);
+    $body = "
+        <p style='font-size:14px;color:#555;margin-bottom:1.25rem;'>
+            There was a database error while saving your reservation. Please try again.
+        </p>
+        <p style='font-size:12px;color:#aaa;margin-bottom:1.25rem;'>Details: {$errMsg}</p>
+        <div class='status-actions'>
+            <a href='reservation_form.php' class='btn-primary'>Try again</a>
+            <a href='index.php' class='btn-secondary'>Home</a>
+        </div>";
+    renderStatusPage('Error', 'Something went <span>wrong</span>', 'We could not save your reservation.', $body);
+    $stmt_res->close();
+    $conn->close();
+    exit();
+}
+
+$reservation_id = $conn->insert_id;
+$stmt_res->close();
 $conn->close();
+
+// ── 6. Pass reservation details to payment page via session ─────
+$_SESSION['zest_reservation'] = [
+    'reservation_id'   => $reservation_id,
+    'customer_id'      => $customer_id,
+    'name'             => $name,
+    'email'            => $email,
+    'phone'            => $phone,
+    'date'             => $date,
+    'time'             => $time,
+    'guests'           => $guests,
+    'table_number'     => $assigned_table_number,
+    'special_requests' => $message,
+    'initiated_at'     => time(),   // payment.php uses this for the 5-min countdown
+];
+
+// ── 7. Redirect to payment page ─────────────────────────────────
+header("Location: payment.php");
+exit();
 ?>

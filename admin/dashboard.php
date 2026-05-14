@@ -1,196 +1,244 @@
+<?php
+// admin/dashboard.php
+session_start();
+
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header("Location: login.php");
+    exit();
+}
+
+// Handle logout
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: login.php");
+    exit();
+}
+
+require_once '../config.php';
+$conn = getDBConnection();
+
+$flash = '';
+$flashType = 'success';
+
+// ── Handle cancellation ─────────────────────────────────────────
+if (isset($_GET['cancel']) && is_numeric($_GET['cancel'])) {
+    $rid  = (int)$_GET['cancel'];
+    $stmt = $conn->prepare("UPDATE reservations SET status = 'cancelled' WHERE reservation_id = ?");
+    $stmt->bind_param("i", $rid);
+    $stmt->execute();
+    $stmt->close();
+    $flash = "Reservation #" . str_pad($rid, 6, '0', STR_PAD_LEFT) . " has been cancelled.";
+}
+
+// ── Handle confirmation ─────────────────────────────────────────
+if (isset($_GET['confirm']) && is_numeric($_GET['confirm'])) {
+    $rid  = (int)$_GET['confirm'];
+    $stmt = $conn->prepare("UPDATE reservations SET status = 'confirmed' WHERE reservation_id = ?");
+    $stmt->bind_param("i", $rid);
+    $stmt->execute();
+    $stmt->close();
+    $flash = "Reservation #" . str_pad($rid, 6, '0', STR_PAD_LEFT) . " has been confirmed.";
+}
+
+// ── Handle deletion ─────────────────────────────────────────────
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $rid  = (int)$_GET['delete'];
+    $stmt = $conn->prepare("DELETE FROM reservations WHERE reservation_id = ?");
+    $stmt->bind_param("i", $rid);
+    $stmt->execute();
+    $stmt->close();
+    $flash = "Reservation #" . str_pad($rid, 6, '0', STR_PAD_LEFT) . " has been deleted.";
+}
+
+// ── Fetch stats ─────────────────────────────────────────────────
+$statsQuery = "SELECT
+    COUNT(*) AS total,
+    SUM(status = 'confirmed') AS confirmed,
+    SUM(status = 'pending')   AS pending,
+    SUM(status = 'cancelled') AS cancelled
+FROM reservations";
+$statsResult = $conn->query($statsQuery);
+$stats = $statsResult ? $statsResult->fetch_assoc() : ['total'=>0,'confirmed'=>0,'pending'=>0,'cancelled'=>0];
+
+// ── Fetch all reservations ──────────────────────────────────────
+$sql = "
+    SELECT r.reservation_id, r.reservation_date, r.reservation_time,
+           r.guests, r.special_requests, r.status, r.table_number,
+           c.customer_name, c.email, c.phone_number
+    FROM reservations r
+    JOIN customers c ON r.customer_id = c.customer_id
+    ORDER BY r.reservation_date DESC, r.reservation_time DESC
+";
+$result = $conn->query($sql);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - <?php echo "Zest Restaurant"; ?></title>
+    <title>Admin Dashboard — Zest Restaurant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
     <link rel="stylesheet" href="../styles.css">
-    <style>
-        .dashboard {
-            max-width: 1200px;
-            margin: 20px auto;
-        }
-        .dashboard h2 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .logout-btn {
-            float: right;
-            background-color: #dc3545;
-            color: white;
-            padding: 8px 16px;
-            text-decoration: none;
-            border-radius: 4px;
-        }
-        .logout-btn:hover {
-            background-color: #c82333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #f8f9fa;
-            font-weight: bold;
-        }
-        .cancel-btn {
-            background-color: #dc3545;
-            color: white;
-            padding: 6px 12px;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .cancel-btn:hover {
-            background-color: #c82333;
-        }
-        .delete-btn {
-            background-color: #8b0000;
-            color: white;
-            padding: 6px 12px;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .delete-btn:hover {
-            background-color: #a00000;
-        }
-        .status-confirmed {
-            color: #28a745;
-            font-weight: bold;
-        }
-        .status-cancelled {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        .no-reservations {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-    </style>
 </head>
 <body>
-    <div class="container dashboard">
-        <?php
-        session_start();
+<div class="admin-wrap">
 
-        // Check if admin is logged in
-        if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-            header("Location: login.php");
-            exit();
-        }
-
-        require_once '../config.php';
-        $conn = getDBConnection();
-
-        // Handle cancellation
-        if (isset($_GET['cancel']) && is_numeric($_GET['cancel'])) {
-            $reservation_id = (int)$_GET['cancel'];
-
-            // Update reservation status to cancelled
-            $stmt = $conn->prepare("UPDATE reservations SET status = 'cancelled' WHERE reservation_id = ?");
-            $stmt->bind_param("i", $reservation_id);
-            $stmt->execute();
-            $stmt->close();
-
-            echo '<div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px;">Reservation cancelled successfully!</div>';
-        }
-
-        // Handle deletion
-        if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-            $reservation_id = (int)$_GET['delete'];
-
-            // Delete the reservation
-            $stmt = $conn->prepare("DELETE FROM reservations WHERE reservation_id = ?");
-            $stmt->bind_param("i", $reservation_id);
-            $stmt->execute();
-            $stmt->close();
-
-            echo '<div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px;">Reservation deleted successfully!</div>';
-        }
-
-        // Fetch all reservations with customer info
-        $sql = "SELECT r.reservation_id, r.reservation_date, r.reservation_time, r.guests, r.special_requests, r.status,
-                       c.customer_name, c.email, c.phone_number
-                FROM reservations r
-                JOIN customers c ON r.customer_id = c.customer_id
-                ORDER BY r.reservation_date DESC, r.reservation_time DESC";
-
-        $result = $conn->query($sql);
-        ?>
-
-        <h2>Admin Dashboard</h2>
-        <a href="?logout=1" class="logout-btn">Logout</a>
-
-        <?php if (isset($_GET['logout'])) {
-            session_destroy();
-            header("Location: login.php");
-            exit();
-        } ?>
-
-        <h3>Reservations Management</h3>
-
-        <?php if ($result->num_rows > 0): ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Customer</th>
-                        <th>Contact</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Guests</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($row = $result->fetch_assoc()): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($row['reservation_id']); ?></td>
-                            <td><?php echo htmlspecialchars($row['customer_name']); ?></td>
-                            <td>
-                                <?php echo htmlspecialchars($row['email']); ?><br>
-                                <?php echo htmlspecialchars($row['phone_number']); ?>
-                            </td>
-                            <td><?php echo htmlspecialchars($row['reservation_date']); ?></td>
-                            <td><?php echo htmlspecialchars($row['reservation_time']); ?></td>
-                            <td><?php echo htmlspecialchars($row['guests']); ?></td>
-                            <td>
-                                <span class="status-<?php echo htmlspecialchars($row['status']); ?>">
-                                    <?php echo ucfirst(htmlspecialchars($row['status'])); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($row['status'] !== 'cancelled'): ?>
-                                    <a href="?cancel=<?php echo $row['reservation_id']; ?>" class="cancel-btn"
-                                       onclick="return confirm('Are you sure you want to cancel this reservation?')">Cancel</a>
-                                <?php else: ?>
-                                    <a href="?delete=<?php echo $row['reservation_id']; ?>" class="delete-btn"
-                                       onclick="return confirm('Are you sure you want to delete this cancelled reservation?')">Delete</a>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <div class="no-reservations">
-                <p>No reservations found.</p>
-            </div>
-        <?php endif; ?>
-
-        <?php
-        $result->close();
-        $conn->close();
-        ?>
+    <!-- Hero header -->
+    <div class="admin-hero">
+        <div class="admin-hero-left">
+            <span class="admin-tagline"><i class="ti ti-shield-lock"></i> Admin Portal</span>
+            <h1>Zest <span>Dashboard</span></h1>
+        </div>
+        <a href="?logout=1" class="admin-logout"
+           onclick="return confirm('Log out of the admin panel?')">
+            <i class="ti ti-logout"></i> Log out
+        </a>
     </div>
+
+    <!-- Flash message -->
+    <?php if ($flash): ?>
+    <div class="flash flash-<?= $flashType ?>">
+        <i class="ti ti-circle-check"></i>
+        <?= htmlspecialchars($flash) ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Stats row -->
+    <div class="admin-stats">
+        <div class="stat-card">
+            <div class="stat-label">Total reservations</div>
+            <div class="stat-value gold"><?= (int)$stats['total'] ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Confirmed</div>
+            <div class="stat-value green"><?= (int)$stats['confirmed'] ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Pending</div>
+            <div class="stat-value gold"><?= (int)$stats['pending'] ?></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Cancelled</div>
+            <div class="stat-value red"><?= (int)$stats['cancelled'] ?></div>
+        </div>
+    </div>
+
+    <!-- Reservations table -->
+    <div class="admin-card">
+        <div class="admin-card-header">
+            <span class="admin-card-title">
+                <i class="ti ti-calendar-event"></i> Reservations
+            </span>
+            <span style="font-size:12px;color:#bbb;"><?= (int)$stats['total'] ?> total</span>
+        </div>
+
+        <?php if ($result && $result->num_rows > 0): ?>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Ref</th>
+                    <th>Customer</th>
+                    <th>Date &amp; Time</th>
+                    <th>Guests</th>
+                    <th>Table</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php while ($row = $result->fetch_assoc()): ?>
+                <tr>
+                    <td style="color:#bbb;font-size:12px;">
+                        #<?= str_pad($row['reservation_id'], 6, '0', STR_PAD_LEFT) ?>
+                    </td>
+                    <td>
+                        <div class="td-name"><?= htmlspecialchars($row['customer_name']) ?></div>
+                        <div class="td-sub"><?= htmlspecialchars($row['email']) ?></div>
+                        <div class="td-sub"><?= htmlspecialchars($row['phone_number']) ?></div>
+                    </td>
+                    <td>
+                        <div class="td-name">
+                            <?= date('d M Y', strtotime($row['reservation_date'])) ?>
+                        </div>
+                        <div class="td-sub"><?= htmlspecialchars($row['reservation_time']) ?></div>
+                    </td>
+                    <td><?= (int)$row['guests'] ?></td>
+                    <td>
+                        <?= $row['table_number'] ? '#' . (int)$row['table_number'] : '<span style="color:#ddd">—</span>' ?>
+                    </td>
+                    <td>
+                        <?php
+                        $s = $row['status'];
+                        $badgeClass = match($s) {
+                            'confirmed' => 'badge-confirmed',
+                            'pending'   => 'badge-pending',
+                            'cancelled' => 'badge-cancelled',
+                            'active'    => 'badge-active',
+                            default     => 'badge-pending',
+                        };
+                        ?>
+                        <span class="badge <?= $badgeClass ?>"><?= ucfirst(htmlspecialchars($s)) ?></span>
+                    </td>
+                    <td style="max-width:140px;">
+                        <?php if (!empty($row['special_requests'])): ?>
+                            <span style="font-size:12px;color:#888;line-height:1.4;">
+                                <?= htmlspecialchars(mb_strimwidth($row['special_requests'], 0, 60, '…')) ?>
+                            </span>
+                        <?php else: ?>
+                            <span style="color:#ddd;font-size:12px;">None</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <?php if ($s === 'pending'): ?>
+                                <a href="?confirm=<?= $row['reservation_id'] ?>" class="act-btn act-confirm"
+                                   onclick="return confirm('Confirm this reservation?')">
+                                    <i class="ti ti-check"></i> Confirm
+                                </a>
+                                <a href="?cancel=<?= $row['reservation_id'] ?>" class="act-btn act-cancel"
+                                   onclick="return confirm('Cancel this reservation?')">
+                                    <i class="ti ti-x"></i> Cancel
+                                </a>
+                            <?php elseif ($s === 'confirmed' || $s === 'active'): ?>
+                                <a href="?cancel=<?= $row['reservation_id'] ?>" class="act-btn act-cancel"
+                                   onclick="return confirm('Cancel this reservation?')">
+                                    <i class="ti ti-x"></i> Cancel
+                                </a>
+                            <?php elseif ($s === 'cancelled'): ?>
+                                <a href="?delete=<?= $row['reservation_id'] ?>" class="act-btn act-delete"
+                                   onclick="return confirm('Permanently delete this reservation?')">
+                                    <i class="ti ti-trash"></i> Delete
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                </tr>
+                <?php endwhile; ?>
+            </tbody>
+        </table>
+
+        <?php else: ?>
+        <div class="admin-empty">
+            <i class="ti ti-calendar-off"></i>
+            No reservations found.
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;font-size:11px;color:#ccc;padding-bottom:1.5rem;">
+        Zest Restaurant Admin &mdash; <a href="../index.php" style="color:#ccc;text-decoration:none;">View site</a>
+    </div>
+
+</div>
+
+<?php
+if ($result) $result->close();
+$conn->close();
+?>
 </body>
 </html>

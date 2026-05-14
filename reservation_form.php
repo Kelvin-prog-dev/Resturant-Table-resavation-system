@@ -47,7 +47,7 @@
 
                     <div class="form-group full">
                         <label for="phone">Phone number</label>
-                        <input type="tel" id="phone" name="phone" placeholder="(555) 000-0000" required>
+                        <input type="tel" id="phone" name="phone" placeholder="+245 712 3456" required>
                     </div>
 
                     <div class="form-divider"></div>

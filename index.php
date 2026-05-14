@@ -62,7 +62,7 @@
                     <div class="contact-icon"><i class="ti ti-phone"></i></div>
                     <div>
                         <div class="contact-label">Phone</div>
-                        <div class="contact-value">(555) 123-4567</div>
+                        <div class="contact-value">+234 567 8901</div>
                     </div>
                 </div>
                 <div class="contact-row">
