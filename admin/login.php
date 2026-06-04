@@ -13,16 +13,47 @@ $error = '';
 if (isset($_POST['login'])) {
     require_once '../config.php';
 
-    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
     $password = trim($_POST['password'] ?? '');
 
-    if ($username === ADMIN_USERNAME && $password === ADMIN_PASSWORD) {
-        $_SESSION['admin_logged_in'] = true;
-        header("Location: dashboard.php");
-        exit();
+    $conn = getDBConnection();
+
+    // Query the database for the user
+    $stmt = $conn->prepare("SELECT user_id, password, role FROM users WHERE email = ?");
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows === 1) {
+        $user = $result->fetch_assoc();
+        
+        // Check password (supports both plain-text and hashed passwords for flexibility)
+        $isValid = false;
+        if (password_verify($password, $user['password'])) {
+            $isValid = true;
+        } elseif ($password === $user['password']) {
+            $isValid = true;
+        }
+
+        if ($isValid) {
+            // Check if the user has an admin role
+            if (strtolower($user['role']) === 'admin') {
+                $_SESSION['admin_logged_in'] = true;
+                $_SESSION['admin_user_id'] = $user['user_id'];
+                header("Location: dashboard.php");
+                exit();
+            } else {
+                $error = "Access denied. Admin privileges required.";
+            }
+        } else {
+            $error = "Invalid email or password. Please try again.";
+        }
     } else {
-        $error = "Invalid username or password. Please try again.";
+        $error = "Invalid email or password. Please try again.";
     }
+
+    $stmt->close();
+    $conn->close();
 }
 ?>
 <!DOCTYPE html>
@@ -58,9 +89,9 @@ if (isset($_POST['login'])) {
 
         <form action="login.php" method="POST">
             <div class="login-field">
-                <label for="username"><i class="ti ti-user" style="font-size:11px"></i> Username</label>
-                <input type="text" id="username" name="username"
-                       placeholder="Enter your username" required autocomplete="username">
+                <label for="email"><i class="ti ti-mail" style="font-size:11px"></i> Email</label>
+                <input type="email" id="email" name="email"
+                       placeholder="Enter your email" required autocomplete="email">
             </div>
             <div class="login-field">
                 <label for="password"><i class="ti ti-lock" style="font-size:11px"></i> Password</label>
